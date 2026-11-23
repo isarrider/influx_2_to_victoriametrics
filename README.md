@@ -141,6 +141,20 @@ Graphs can look different from InfluxDB even with identical data (see the Victor
 * To redo a single chunk, delete its entry from `state.json` (and the `.lp.gz` file) and run again.
 * After importing, the tool calls `/internal/force_flush` and `/internal/resetRollupResultCache`, so the backfilled data is visible immediately and Grafana doesn't show cached gaps.
 
+## Speed
+
+The import is **single-threaded on purpose**: one chunk after the other, one request at a time. That keeps the extra load on a VictoriaMetrics that is already serving live data low and predictable, the chunks are imported strictly in time order, and resuming after an interruption stays simple.
+
+| Stage | Limited by | Note |
+|---|---|---|
+| Export (`export-lp`) | Disk reads, one thread, gzip | Usually seconds to minutes per chunk |
+| Sending (i2vm) | One request at a time | Usually the slowest part, by design |
+| VM parsing | CPU | Rarely the limit with a single sender |
+| VM new series | Index creation for the first sample of each series | Mostly visible in the first chunk |
+| VM disk | Background merges | Matters on SD cards / USB HDDs, not on SSDs |
+
+The one knob is `BATCH_BYTES` (default 8 MiB uncompressed per request). Larger batches mean fewer round trips; VictoriaMetrics accepts up to 64 MB per request by default (`-influx.maxRequestSize`).
+
 ## Without Docker
 
 ```bash
