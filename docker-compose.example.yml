@@ -1,0 +1,29 @@
+# Example: run the migration next to an existing InfluxDB 2 + VictoriaMetrics setup.
+#
+#   docker compose -f docker-compose.example.yml run --rm i2vm             # export + import + compare
+#   docker compose -f docker-compose.example.yml run --rm i2vm compare     # only compare again
+#
+# Adjust the volume name / network to your setup. For a fully consistent export,
+# stop InfluxDB first (docker stop influxdb) - see README.
+services:
+  i2vm:
+    image: ghcr.io/isarrider/influx_2_to_victoriametrics:latest
+    volumes:
+      - influxdb2-data:/var/lib/influxdb2:ro   # InfluxDB's data volume, read-only
+      - ./export:/export                        # chunk files, state.json, compare_report.csv
+    environment:
+      # source: either BUCKET_ID, or BUCKET + INFLUX_URL + INFLUX_TOKEN
+      BUCKET: home_assistant
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN}
+      # time window: END = when your writers switched to VictoriaMetrics
+      # START: leave empty to auto-detect the oldest point (needs the API settings above)
+      END: "2026-11-01T00:00:00Z"
+      CHUNK: month
+      # destination: VM_DB must give the same db label your live data has
+      VM_URL: http://victoriametrics:8428
+      VM_DB: home_assistant
+
+volumes:
+  influxdb2-data:
+    external: true
