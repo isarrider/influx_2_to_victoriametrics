@@ -9,7 +9,8 @@ VM_IMAGE=${3:-victoriametrics/victoria-metrics:latest}
 NET=i2vm-test
 TOKEN=i2vm-test-token
 HERE=$(cd "$(dirname "$0")" && pwd)
-WORK=$(mktemp -d)
+WORK=${WORK:-$(mktemp -d)}
+mkdir -p "$WORK/export"
 
 cleanup() {
   docker rm -f i2vm-influx i2vm-vm >/dev/null 2>&1 || true
@@ -58,7 +59,13 @@ run_i2vm() {
 }
 
 echo "== migrate (InfluxDB still running, engine mounted read-only, START auto-detected)"
-run_i2vm migrate
+if ! run_i2vm migrate; then
+  echo "== FAIL - non-OK rows:"; grep -v ',OK,' "$WORK/export/compare_report.csv" | head -20
+  echo "== sample of what VictoriaMetrics stored for these series:"
+  curl -fsS http://127.0.0.1:18428/api/v1/export --data-urlencode 'match[]={__name__=~".*_str"}' \
+    --data-urlencode 'end=2024-01-01T01:00:00Z' | cut -c1-400
+  exit 1
+fi
 
 echo "== state + report"
 cat "$WORK/export/state.json"

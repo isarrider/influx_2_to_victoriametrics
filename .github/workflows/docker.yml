@@ -30,7 +30,17 @@ jobs:
         run: docker build --build-arg INFLUXDB_TAG=${{ matrix.influxdb }} -t i2vm:test .
 
       - name: End-to-end migration InfluxDB -> VictoriaMetrics
+        env:
+          WORK: ${{ runner.temp }}/i2vm
         run: tests/integration.sh i2vm:test influxdb:${{ matrix.influxdb }}
+
+      - name: Upload export dir (state.json, compare_report.csv)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i2vm-export-${{ matrix.influxdb }}
+          path: ${{ runner.temp }}/i2vm/export/*.csv
+          if-no-files-found: ignore
 
   publish:
     name: Publish to ghcr.io
