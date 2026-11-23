@@ -200,8 +200,9 @@ def find_oldest(args):
     """Ask InfluxDB (Flux) for the oldest point in the bucket."""
     if not args.bucket:
         raise RuntimeError("START is not set; set it, or set BUCKET + INFLUX_URL + INFLUX_TOKEN to detect it")
+    # keep only _time before merging the tables: _value differs in type (float/bool/string)
     flux = (f'from(bucket: "{args.bucket}") |> range(start: 0) |> first() '
-            f'|> group() |> min(column: "_time") |> keep(columns: ["_time"])')
+            f'|> keep(columns: ["_time"]) |> group() |> min(column: "_time")')
     body = {"query": flux, "type": "flux", "dialect": {"header": True, "annotations": []}}
     q = {"org": args.influx_org} if args.influx_org else None
     out = influx_api(args, "/api/v2/query", q, body=body, accept="application/csv")
