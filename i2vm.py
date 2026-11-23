@@ -372,10 +372,15 @@ def _unescape(s):
     return "".join(out)
 
 
+STRING = object()  # marker for string field values
+
+
 def _field_value(v):
-    """Float for numeric/bool fields, None for strings (VictoriaMetrics does not store strings)."""
-    if not v or v[0] == '"':
+    """Float for numeric/bool fields, STRING for string fields."""
+    if not v:
         return None
+    if v[0] == '"':
+        return STRING
     if v[-1] in "iu":
         return float(v[:-1])
     lv = v.lower()
@@ -485,8 +490,13 @@ def aggregate_lp(args, path, lo_ms, hi_ms):
             if args.vm_db and not any(k == args.db_label for k, _ in labels):
                 labels.append((args.db_label, args.vm_db))
             for fk, val in fields:
-                if val is None:
-                    continue  # string field
+                if val is STRING:
+                    # VictoriaMetrics stores string fields as a series with value 0
+                    if args.string_fields == "skip":
+                        continue
+                    val = 0.0
+                elif val is None:
+                    continue
                 k = series_key(metric_name(args, meas, fk, len(fields)), labels)
                 a = aggs.get(k)
                 if a is None:
@@ -674,6 +684,9 @@ def build_parser():
                    help="VM runs with -influxSkipSingleField [SKIP_SINGLE_FIELD]")
     g.add_argument("--match", default=env("MATCH"),
                    help='series selector for the VM side, default {db="<VM_DB>"} [MATCH]')
+    g.add_argument("--string-fields", default=env("STRING_FIELDS", "zero"), choices=["zero", "skip"],
+                   help="VictoriaMetrics stores string fields (e.g. HA's friendly_name_str) as series with "
+                        "value 0: 'zero' expects them, 'skip' if you drop them via relabeling [STRING_FIELDS, zero]")
     g.add_argument("--rel-tol", type=float, default=float(env("REL_TOL", "1e-9")),
                    help="relative tolerance for sums [REL_TOL, 1e-9]")
     g.add_argument("--report", default=env("REPORT"), help="CSV path [REPORT, <export-dir>/compare_report.csv]")
