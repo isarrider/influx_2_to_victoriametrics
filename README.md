@@ -124,6 +124,15 @@ Then run the compare with `STRING_FIELDS=skip`. Alternatively, limit what HA wri
 
 VictoriaMetrics doesn't speak InfluxQL or Flux. Dashboards need a Prometheus-type datasource pointing at VM and MetricsQL queries, e.g. `mean("value") … GROUP BY time($__interval)` becomes `avg_over_time(°C_value{entity_id="wohnzimmer_temp"}[$__interval])`. Metric names with special characters such as `°C_value` must be written as `{__name__="°C_value", …}`.
 
+Graphs can look different from InfluxDB even with identical data (see the VictoriaMetrics [migration guide](https://docs.victoriametrics.com/guides/migrate-from-influx/)):
+
+| Difference | InfluxDB | VictoriaMetrics | What to do |
+|---|---|---|---|
+| Gaps in the data | Shown as gaps (unless `fill(previous)`) | Filled by default (series are treated as continuous) | Start VM with `-search.setLookbackToStep` to fill at most one step |
+| `GROUP BY time(…)` | In the query | The `step` / `$__interval` of the range query | `avg_over_time(m[$__interval])` |
+| Extra points | – | Appear if the step is smaller than the data resolution | Set the panel's *Min interval* to the sensor's write interval |
+| Real last value | `last()` | `last_over_time(m[…])` / `tlast_over_time` | Use it for stat panels (e.g. meter readings) |
+
 ## Re-running and resuming
 
 * Running the same command again skips every chunk that `state.json` marks as exported / imported, and then compares again. That's safe at any time.
